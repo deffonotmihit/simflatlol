@@ -1,0 +1,487 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>BMW 116d SE Simulator</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="116d Sim">
+<meta name="theme-color" content="#b4b9bd">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#b4b9bd;font:13px/1.4 system-ui,sans-serif;color:#222}
+#hud{position:fixed;left:0;right:0;bottom:18px;text-align:center;pointer-events:none}
+#spd{font-size:44px;font-weight:600}#g{font-size:22px;margin-left:10px}
+#bar{width:260px;height:6px;margin:6px auto;background:#0003;border-radius:3px;overflow:hidden}
+#rpm{height:100%;width:0;background:#333}
+#help{position:fixed;top:10px;left:12px;opacity:.7}
+#mph{font-size:26px;font-weight:600}#mphw{margin-left:14px}#tcs{font-size:13px;font-weight:600;margin-left:8px;color:#c0392b}#mode{font-size:13px;font-weight:600;margin-left:10px;opacity:.65}
+#cam{font-size:13px;font-weight:600;margin-left:10px;opacity:.65}
+#hud,#help{z-index:6}
+body.clean #hud,body.clean #help{opacity:0;transition:opacity .3s}
+body.clean #touch .b{opacity:.12}
+body.clean #touch #tHd{opacity:.5}
+#credit{position:fixed;top:50px;left:12px;font-size:10px;opacity:.45;pointer-events:none}
+/* ---- touch controls (shown on touch devices only) ---- */
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+#touch,#rotate{display:none}
+body.touch #touch{display:block}
+body.touch #help{display:none}
+body.touch #credit{top:max(8px,env(safe-area-inset-top))}
+body.touch #hud{bottom:max(14px,env(safe-area-inset-bottom))}
+#touch .b{position:fixed;display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+ color:#fff;font:600 15px system-ui,sans-serif;text-align:center;line-height:1.1;letter-spacing:.02em;
+ background:rgba(34,37,40,.45);border:1.5px solid rgba(255,255,255,.45);border-radius:18px;
+ touch-action:none;pointer-events:auto}
+#touch .b.on{background:rgba(20,22,24,.72);border-color:#fff}
+#touch .big{width:clamp(70px,14vw,108px);height:clamp(70px,14vw,108px);font-size:30px}
+#touch .tall{width:clamp(70px,13vw,100px);height:clamp(110px,26vh,150px);font-size:14px}
+#touch .sm{min-width:54px;height:36px;padding:0 10px;border-radius:12px;font-size:12px}
+#tL{left:max(14px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom))}
+#tR{left:calc(max(14px,env(safe-area-inset-left)) + clamp(70px,14vw,108px) + 12px);bottom:max(18px,env(safe-area-inset-bottom))}
+#tG{right:max(14px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom))}
+#tB{right:calc(max(14px,env(safe-area-inset-right)) + clamp(70px,13vw,100px) + 12px);bottom:max(18px,env(safe-area-inset-bottom))}
+#tH{right:calc(max(14px,env(safe-area-inset-right)) + clamp(70px,13vw,100px) + 12px);bottom:calc(max(18px,env(safe-area-inset-bottom)) + clamp(110px,26vh,150px) + 10px)}
+#tTop{position:fixed;display:flex;flex-wrap:wrap;justify-content:flex-end;max-width:72vw;gap:6px;right:max(14px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top))}
+#touch #tTop .b{position:static}
+@media (orientation:portrait){body.touch #rotate{display:flex;position:fixed;left:0;right:0;top:38%;justify-content:center;pointer-events:none;
+ font:600 16px system-ui,sans-serif;color:#222;text-align:center;opacity:.75}}
+/* ---- night mode: keep the HUD readable on the dark scene ---- */
+body{transition:color .8s}
+body.night{color:#dfe5ee}
+body.night #bar{background:#fff3}
+body.night #rpm{background:#cfd6e0}
+body.night.touch #rotate{color:#dfe5ee}
+</style></head><body>
+<div id="help">W/↑ throttle · S/↓ brake/reverse · A D/←→ steer · Space handbrake · E/Q shift · M manual/auto · L lights · N day/night · P 116d/M140i · T traction control · Enter respawn<br>C camera mode (chase / free / cinematic) · V next cinematic shot · 1-7 pick shot · drag = look · right-drag/shift-drag = pan · wheel = zoom · R/dbl-click reset · B letterbox · H hide HUD</div>
+<div id="credit">3D model: 2018 BMW M140i by Ddiaz Design (CC BY 4.0)</div>
+<div id="hud"><span id="spd">0</span> km/h<span id="mphw"><span id="mph">0</span> mph</span><span id="g">1</span><span id="mode">116d</span><span id="tcs"></span><span id="cam"></span><div id="bar"><div id="rpm"></div></div></div>
+<div id="touch">
+ <div class="b big" id="tL" data-k="KeyA" data-hold>◀</div>
+ <div class="b big" id="tR" data-k="KeyD" data-hold>▶</div>
+ <div class="b tall" id="tB" data-k="KeyS" data-hold>BRAKE<br>REV</div>
+ <div class="b tall" id="tG" data-k="KeyW" data-hold>GAS</div>
+ <div class="b sm" id="tH" data-k="Space" data-hold>HANDBRAKE</div>
+ <div id="tTop">
+  <div class="b sm" id="tCm" data-k="KeyC">CAM</div>
+  <div class="b sm" id="tSh" data-k="KeyV">SHOT</div>
+  <div class="b sm" id="tHd" data-k="KeyH">HUD</div>
+  <div class="b sm" id="tEn" data-k="Enter">RESET</div>
+  <div class="b sm" id="tLt" data-k="KeyL">LIGHTS</div>
+  <div class="b sm" id="tN" data-k="KeyN">N</div>
+  <div class="b sm" id="tP" data-k="KeyP">MODE</div>
+  <div class="b sm" id="tT" data-k="KeyT">TC</div>
+  <div class="b sm" id="tM" data-k="KeyM">A / M</div>
+  <div class="b sm" id="tD" data-k="KeyQ">GEAR ▼</div>
+  <div class="b sm" id="tU" data-k="KeyE">GEAR ▲</div>
+ </div>
+</div>
+<div id="rotate">Rotate your phone to landscape to drive</div>
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script>
+// ---------- Vehicle data: 2017 BMW 116d SE manual (F20 LCI) ----------
+const G=9.81,L=2.69,A_=1.345,B_=L-A_,R=0.316,IW=1.0,RHO=1.2,DT=1/240;
+const HW=1500; // half-size of the world: 3 km x 3 km (the boundary wall)
+// Everything below is a tunable: these are the 116d values (default mode). The M140i set is applied by applyMode().
+let M=1375,TF=1.51,TR=1.55,H=0.52,IZ=2400;
+let CDA=0.55,CRR=0.011,MU=1.0,ETA=0.92,IE=0.22,FD=3.15,REV=3.46;
+let GEARS=[0,4.459,2.508,1.665,1.241,1.0,0.806];
+let TC=[[800,100],[1000,150],[1250,215],[1500,250],[1750,270],[2250,270],[2750,250],[3000,243],[3500,227],[4000,203],[4500,170],[5000,130],[5300,0]];
+let KP=0.12,AP=0.2,BRK=4700;
+let RL=5000,RMAX=5300,TF0=14,TF1=0.009,BA=0.62,BB=0.38,BS=1.6,BO=1000,BW=800,US0=2300,US1=2200,DS0=1100,DS1=500,DSL=4300,SHIFT=0.15;
+let STA=0.58,STB=0.03,STS=9,FB=0.68,RB=0.32,VMAX=1e9,RGX=0.0062,PGX=0.0044,LSDK=0,LSDP=0,LSDF=0,TCS=0.12,TCG=10,TCMIN=0.1,CE=0.5,CLT=800,LR=1200,ABSK=0.14,THRUP=12,CRAMP=14,MUL=1,BRUP=10;
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const interp=(t,x)=>{if(x<=t[0][0])return t[0][1];for(let i=1;i<t.length;i++)if(x<t[i][0]){const a=t[i-1],b=t[i];return a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]);}return 0;};
+const pac=x=>Math.sin(1.4*Math.atan(3*x-0.3*(3*x-Math.atan(3*x))));
+
+// ---------- State ----------
+const keys={};
+let night=false,nightT=0,perf=false,tcOn=true; // day/night and performance mode are kept outside the vehicle state (respawn keeps them) // day/night is visual only and lives outside the vehicle state (so respawn keeps it)
+const W=[[A_,TF/2,1],[A_,-TF/2,1],[-B_,TR/2,0],[-B_,-TR/2,0]].map(([x,y,f])=>({x,y,f,w:0,ang:0,steer:0,Fz:0,k:0}));
+let s;
+function reset(){s={X:0,Z:0,psi:0,u:0,v:0,r:0,axf:0,ayf:0,gear:1,shiftT:0,rpm:850,boost:0,thr:0,ped:0,hb:0,steerIn:0,delta:0,eSm:0,auto:true,
+ roll:0,rollV:0,pitch:0,pitchV:0,lights:false,braking:false};W.forEach(w=>{w.w=0;w.steer=0});}
+reset();
+const setGear=g=>{s.gear=g;s.shiftT=g===0?0.15:SHIFT;};
+const ratioOf=g=>g>0?GEARS[g]*FD:g<0?-REV*FD:0;
+// ---------- Performance modes ----------
+// 116d (default): the values above.  M140i: 2017 BMW M140i (F20 LCI, B58 3.0 l turbo, 340 PS / 500 Nm, 6-speed manual, M Sport diff, 225/40-245/35 R18).
+const MODES={
+ d116:{M,TF,TR,H,IZ,CDA,CRR,MU,ETA,IE,FD,REV,GEARS,TC,KP,AP,BRK,RL,RMAX,TF0,TF1,BA,BB,BS,BO,BW,US0,US1,DS0,DS1,DSL,SHIFT,STA,STB,STS,FB,RB,VMAX,RGX,PGX,LSDK,LSDP,LSDF,TCS,TCG,TCMIN,CE,CLT,LR,ABSK,THRUP,CRAMP,MUL,BRUP},
+ m140:{M:1520,TF:1.516,TR:1.534,H:0.51,IZ:2650,
+  CDA:0.60,CRR:0.012,MU:1.10,ETA:0.92,IE:0.27,FD:3.154,REV:3.5,
+  GEARS:[0,4.11,2.315,1.542,1.179,1.0,0.846],
+  // B58B30 full-load torque (Nm): 500 Nm from ~1520 to 4500 rpm, 250 kW (340 PS) at 5500-6500 rpm, 7000 rpm redline
+  TC:[[800,120],[1000,200],[1250,360],[1520,500],[2000,500],[3000,500],[4000,500],[4500,497],[5000,470],[5500,434],[6000,398],[6500,367],[7000,330],[7200,0]],
+  KP:0.11,AP:0.17,BRK:5900,RL:6900,RMAX:7100,TF0:18,TF1:0.0105,BA:0.78,BB:0.22,BS:2.4,BO:1100,BW:600,
+  US0:2600,US1:3900,DS0:1500,DS1:1000,DSL:6200,SHIFT:0.15,STA:0.58,STB:0.03,STS:9,FB:0.68,RB:0.32,
+  VMAX:69.44,RGX:0.0048,PGX:0.0036,LSDK:100,LSDP:120,LSDF:0.3,TCS:0.13,TCG:8,TCMIN:0.1,CE:0.7,CLT:1000,LR:2000,ABSK:0.112,THRUP:12,CRAMP:14,MUL:1.1,BRUP:10}};
+function applyMode(m){({M,TF,TR,H,IZ,CDA,CRR,MU,ETA,IE,FD,REV,GEARS,TC,KP,AP,BRK,RL,RMAX,TF0,TF1,BA,BB,BS,BO,BW,US0,US1,DS0,DS1,DSL,SHIFT,STA,STB,STS,FB,RB,VMAX,RGX,PGX,LSDK,LSDP,LSDF,TCS,TCG,TCMIN,CE,CLT,LR,ABSK,THRUP,CRAMP,MUL,BRUP}=MODES[m]);}
+function togglePerf(){perf=!perf;applyMode(perf?'m140':'d116');}
+addEventListener('keydown',e=>{
+ const k=e.code;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(k))e.preventDefault();
+ if(e.repeat)return;keys[k]=true;
+ if(k==='KeyM')s.auto=!s.auto;if(k==='KeyL')s.lights=!s.lights;if(k==='KeyN')night=!night;if(k==='KeyP')togglePerf();if(k==='KeyT')tcOn=!tcOn;if(k==='Enter')reset();
+ if(!s.auto&&s.shiftT<=0){const d=k==='KeyE'?1:k==='KeyQ'?-1:0;if(d){const g=clamp(s.gear+d,-1,6);if(g===-1&&Math.abs(s.u)>2)return;if(g!==s.gear)setGear(g);}}
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+const K=()=>({up:keys.KeyW||keys.ArrowUp,dn:keys.KeyS||keys.ArrowDown,l:keys.KeyA||keys.ArrowLeft,r:keys.KeyD||keys.ArrowRight,hb:keys.Space});
+
+// ---------- Physics ----------
+function step(dt){
+ const k=K();let thrIn=k.up?1:0,brkIn=k.dn?1:0;
+ const wAvg=(W[2].w+W[3].w)/2;
+ if(s.auto&&s.shiftT<=0){
+  const u=s.u;
+  if(s.gear<=0){if(k.up&&!k.dn&&u>-0.6)setGear(1);else if(s.gear===0&&k.dn&&!k.up)setGear(-1);}
+  else if(k.dn&&!k.up&&u<0.6)setGear(-1);
+  else{const rin=g=>Math.abs(wAvg)*ratioOf(g)*9.549;const t=s.thr;
+   if(s.gear<6&&!k.dn&&rin(s.gear)>US0+US1*t)setGear(s.gear+1);
+   else if(s.gear>1&&rin(s.gear)<DS0+DS1*t&&rin(s.gear-1)<DSL)setGear(s.gear-1);}
+ }
+ if(s.gear===-1&&s.auto)[thrIn,brkIn]=[brkIn,thrIn];
+ // pedals
+ s.thr+=clamp(thrIn-s.thr,-8*dt,THRUP*dt);s.ped+=clamp(brkIn-s.ped,-8*dt,BRUP*dt);s.hb+=clamp((k.hb?1:0)-s.hb,-6*dt,6*dt);
+ s.shiftT=Math.max(0,s.shiftT-dt);
+ const thr=s.thr,speed=Math.hypot(s.u,s.v);
+ // steering (speed-sensitive lock, ~34deg at standstill)
+ const tgt=(k.l?1:0)-(k.r?1:0),rate=tgt===0?5:(tgt*s.steerIn<0?7:3.5);
+ s.steerIn+=clamp(tgt-s.steerIn,-rate*dt,rate*dt);
+ s.delta=s.steerIn*(STA/(1+(speed/STS)**2)+STB);
+ W[0].steer=W[1].steer=s.delta;
+ // driveline / clutch
+ const ratio=ratioOf(s.gear),rin=Math.abs(wAvg*ratio)*9.549;
+ let e=0;if(ratio&&s.shiftT<=0)e=Math.max(clamp((rin-650)/500,0,1),thr>0.03?CE:0);
+ s.eSm=e>s.eSm?Math.min(e,s.eSm+CRAMP*dt):e;
+ const eS=s.eSm,locked=ratio&&eS>=0.999,slip=ratio&&!locked&&eS>0.01;
+ // engine
+ const tgtB=thr*clamp((s.rpm-BO)/BW,0,1);s.boost+=(tgtB-s.boost)*dt*(tgtB>s.boost?BS:3);
+ const tf=TF0+s.rpm*TF1,full=interp(TC,s.rpm);
+ const tcF=TCS>0&&tcOn?clamp(1-(Math.max(W[2].k,W[3].k)-TCS)*TCG,TCMIN,1):1;
+ let Te=(full+tf)*thr*tcF*(BA+BB*s.boost)-tf;
+ if(s.rpm<880)Te+=(880-s.rpm)*0.4;
+ if(s.rpm>RL||speed>VMAX)Te=Math.min(Te,-tf)*1;
+ let Tc=0,Ieff=0;
+ if(locked){s.rpm=Math.max(rin,850);Tc=Te;Ieff=0.5*IE*ratio*ratio;}
+ else if(slip){const trg=Math.max(rin,850+thr*LR);s.rpm+=(trg-s.rpm)*Math.min(1,dt*15);Tc=clamp(Te,0,CLT*eS);Ieff=0.5*IE*ratio*ratio*eS;}
+ else{s.rpm=clamp(s.rpm+dt*Te/IE*9.549,600,RMAX);}
+ const Td=Tc*ratio*ETA/2;
+ // load transfer (filtered accelerations)
+ const dFx=M*s.axf*H/L,dFyF=M*s.ayf*H*0.6/TF,dFyR=M*s.ayf*H*0.4/TR;
+ let Fx=0,Fy=0,Mz=0;
+ // rear limited-slip differential (M140i M Sport diff): preload + torque-sensitive locking between the two driven wheels (LSDK=0 = open diff)
+ const lsdL=LSDP+LSDF*Math.abs(Td)*2,lsdT=clamp(LSDK*(W[2].w-W[3].w),-lsdL,lsdL);
+ for(const w of W){
+  w.Fz=Math.max(50,M*G*(w.f?B_:A_)/L/2+(w.f?-dFx/2:dFx/2)+(w.y>0?-1:1)*(w.f?dFyF:dFyR));
+  const c=Math.cos(w.steer),sn=Math.sin(w.steer);
+  const vx=s.u-s.r*w.y,vy=s.v+s.r*w.x,vl=vx*c+vy*sn,vt=-vx*sn+vy*c,den=Math.max(Math.abs(vl),2);
+  const kap=(w.w*R-vl)/den,ta=vt/den,sg=Math.hypot(kap/KP,ta/AP);w.k=kap;
+  let Fxw=0,Fyw=0,sec=4.2/KP;
+  if(sg>1e-5){const F=pac(sg);Fxw=MU*MUL*w.Fz*F*(kap/KP)/sg;Fyw=-MU*w.Fz*F*(ta/AP)/sg;sec=MU*MUL*w.Fz*(F/sg)/KP;}
+  Fx+=Fxw*c-Fyw*sn;Fy+=Fxw*sn+Fyw*c;
+  Mz+=w.x*(Fxw*sn+Fyw*c)-w.y*(Fxw*c-Fyw*sn);
+  // brakes with ABS
+  let tb=(w.f?FB:RB)*BRK/2*s.ped;
+  if(kap<-ABSK)tb*=clamp(1+(kap+ABSK)*9,0,1);
+  if(!w.f)tb+=1800*s.hb;
+  const I=w.f?IW:IW+Ieff,kk=R*R*sec/den;
+  const Tn=(w.f?0:Td+(w===W[2]?-lsdT:w===W[3]?lsdT:0))-Fxw*R;
+  let nw=w.w+dt*Tn/(I+dt*kk);
+  if(tb>0){const d=dt*tb/I;if(Math.abs(nw)<=d)nw=0;else nw-=Math.sign(nw)*d;}
+  w.w=nw;w.ang+=nw*dt;
+ }
+ s.braking=s.ped>0.05||(s.gear===-1&&false);
+ // body
+ const fa=0.5*RHO*CDA*speed,Frr=CRR*M*G*Math.tanh(s.u/0.3);
+ const ax=(Fx-fa*s.u-Frr)/M,ay=(Fy-fa*s.v)/M;
+ s.u+=(ax+s.r*s.v)*dt;s.v+=(ay-s.r*s.u)*dt;s.r+=Mz/IZ*dt;
+ const a=dt/(0.06+dt);s.axf+=(ax-s.axf)*a;s.ayf+=(ay-s.ayf)*a;
+ if(speed<0.08&&thr<0.02&&Math.abs(s.r)<0.05){s.u=s.v=s.r=0;}
+ const sn=Math.sin(s.psi),cs=Math.cos(s.psi);
+ s.X+=(s.u*sn+s.v*cs)*dt;s.Z+=(s.u*cs-s.v*sn)*dt;s.psi+=s.r*dt;
+ // wall collision
+ let hit=false;
+ for(const [lx,ly] of [[2.16,.88],[2.16,-.88],[-2.16,.88],[-2.16,-.88]]){
+  const S=Math.sin(s.psi),C=Math.cos(s.psi),cx=s.X+lx*S+ly*C,cz=s.Z+lx*C-ly*S;
+  const ox=Math.abs(cx)>HW?cx-Math.sign(cx)*HW:0,oz=Math.abs(cz)>HW?cz-Math.sign(cz)*HW:0;
+  if(ox||oz){hit=true;s.X-=ox;s.Z-=oz;
+   let vwx=s.u*S+s.v*C,vwz=s.u*C-s.v*S;
+   if(ox&&vwx*ox>0)vwx=-vwx*0.15,vwz*=0.9;if(oz&&vwz*oz>0)vwz=-vwz*0.15,vwx*=0.9;
+   s.u=vwx*S+vwz*C;s.v=vwx*C-vwz*S;s.r*=0.9;}
+ }
+ // visual suspension (2nd order)
+ const wn=9,z=0.45,rt=s.ayf*RGX,pt=-s.axf*PGX;
+ s.rollV+=(wn*wn*(rt-s.roll)-2*z*wn*s.rollV)*dt;s.roll+=s.rollV*dt;
+ s.pitchV+=(wn*wn*(pt-s.pitch)-2*z*wn*s.pitchV)*dt;s.pitch+=s.pitchV*dt;
+}
+
+// ---------- Scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xb4b9bd);scene.fog=new THREE.Fog(0xb4b9bd,80,650);
+const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,1500);
+addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();});
+const hemi=new THREE.HemisphereLight(0xd8dde0,0x70736f,0.9);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xe6e8ea,0.55);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:120});scene.add(sun,sun.target);
+// ground (the car-park markings are added by world.js)
+const cv=document.createElement('canvas');cv.width=cv.height=512;const cx=cv.getContext('2d');
+cx.fillStyle='#585b5e';cx.fillRect(0,0,512,512);
+for(let i=0;i<9000;i++){const g=70+Math.random()*40|0;cx.fillStyle=`rgb(${g},${g+2},${g+4})`;cx.fillRect(Math.random()*512,Math.random()*512,2,2);}
+cx.fillStyle='#7d8084';cx.fillRect(0,0,512,3);cx.fillRect(0,0,3,512);
+const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(100,100);tex.anisotropy=8;
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(HW*2,HW*2),new THREE.MeshStandardMaterial({map:tex,roughness:1}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const wm=new THREE.MeshStandardMaterial({color:0x9a9fa3,roughness:1});
+[[0,-HW-0.5,HW*2+2,1],[0,HW+0.5,HW*2+2,1],[-HW-0.5,0,1,HW*2+2],[HW+0.5,0,1,HW*2+2]].forEach(([x,z,w,d])=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,d),wm);m.position.set(x,1.5,z);scene.add(m);});
+
+// ---------- Day / night + F20 dipped-beam headlights ----------
+// Visual only: nothing in this block touches the vehicle state or the physics.
+const headMeshes=[],envMats=[];
+// headlamp optical centres in body space; replaced by the real positions measured from the model once it has loaded
+const lamp=[new THREE.Vector3(0.62,0.69,2.05),new THREE.Vector3(-0.62,0.69,2.05)];
+function setLamps(ms){
+ if(!ms.length)return;
+ body.updateMatrixWorld(true);
+ const inv=new THREE.Matrix4().copy(body.matrixWorld).invert(),v=new THREE.Vector3(),bb=[new THREE.Box3(),new THREE.Box3()]; // [left (+x), right (-x)]
+ ms.forEach(m=>{m.updateMatrixWorld(true);const mm=new THREE.Matrix4().multiplyMatrices(inv,m.matrixWorld),p=m.geometry.attributes.position;
+  for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i).applyMatrix4(mm);bb[v.x>0?0:1].expandByPoint(v);}});
+ bb.forEach((b,i)=>{if(!b.isEmpty())b.getCenter(lamp[i]);});
+}
+// rear licence-plate lamps: two small LED units on the tailgate's lower edge above the plate, faint, on with the lights
+const mPlate=new THREE.MeshStandardMaterial({color:0x2a2822,emissive:0xffecc2,emissiveIntensity:0,roughness:0.5});
+function addPlateLights(){
+ [0.2,-0.2].forEach(x=>{const m=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.02,0.012),mPlate);m.position.set(x,0.64,-2.128);body.add(m);});
+}
+function collectEnv(){ // paint/wheel materials that carry the reflection map are dimmed at night
+ const seen=new Set();envMats.length=0;
+ car.traverse(o=>{(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m&&m.envMap&&!seen.has(m)){seen.add(m);m.userData.e0=m.envMapIntensity;envMats.push(m);}});});
+ lastT=-1;
+}
+const stars=(()=>{const n=650,a=new Float32Array(n*3);
+ for(let i=0;i<n;i++){const u=Math.random()*Math.PI*2,y=0.03+Math.random()*0.97,r=Math.sqrt(1-y*y);a[i*3]=Math.cos(u)*r*1000;a[i*3+1]=y*1000;a[i*3+2]=Math.sin(u)*r*1000;}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(a,3));
+ const p=new THREE.Points(g,new THREE.PointsMaterial({color:0xdfe8ff,size:1.7,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false,fog:false}));
+ p.frustumCulled=false;p.visible=false;scene.add(p);return p;})();
+const C=h=>new THREE.Color(h);
+const DN={bg:[C(0xb4b9bd),C(0x03050b)],hs:[C(0xd8dde0),C(0x22335c)],hg:[C(0x70736f),C(0x080a10)],sc:[C(0xe6e8ea),C(0x8ea3dc)]};
+let lastT=-1,lastNight=null,beamOn=0;
+function dayNight(fd){
+ nightT+=clamp((night?1:0)-nightT,-fd*1.25,fd*1.25); // ~0.8 s fade
+ if(nightT!==lastT){
+  lastT=nightT;const t=nightT*nightT*(3-2*nightT);
+  scene.background.lerpColors(DN.bg[0],DN.bg[1],t);scene.fog.color.copy(scene.background);
+  scene.fog.near=80-50*t;scene.fog.far=650-230*t;
+  hemi.color.lerpColors(DN.hs[0],DN.hs[1],t);hemi.groundColor.lerpColors(DN.hg[0],DN.hg[1],t);hemi.intensity=0.9-0.4*t;
+  sun.color.lerpColors(DN.sc[0],DN.sc[1],t);sun.intensity=0.55-0.38*t; // the "sun" becomes a dim blue moon
+  envMats.forEach(m=>m.envMapIntensity=m.userData.e0*(1-0.94*t));
+  stars.material.opacity=t;stars.visible=t>0.02;
+  const hex='#'+scene.background.getHexString();document.body.style.background=hex;
+  if(nightT===0||nightT===1){const tc=document.querySelector('meta[name=theme-color]');if(tc)tc.content=hex;}
+ }
+ if(night!==lastNight){lastNight=night;document.body.classList.toggle('night',night);}
+ stars.position.copy(cam.position);
+}
+// Dipped beam (ECE R112 style, UK/left-hand-traffic): flat cut-off 1 % below horizontal on the right (oncoming side),
+// 15 degree kick-up on the left (kerb side), hot-spot just under the cut-off, wide foreground spread, ~70 m reach from a 0.7 m lamp height.
+// Evaluated per pixel on the ground and walls from the real lamp positions / body orientation, so it dips and rolls with the body.
+const BU={uLamp:{value:[new THREE.Vector3(),new THREE.Vector3()]},uF:{value:new THREE.Vector3(0,0,1)},uL:{value:new THREE.Vector3(1,0,0)},uU:{value:new THREE.Vector3(0,1,0)},uK:{value:0}};
+const BEAM_GLSL=`
+uniform vec3 uLamp[2];uniform vec3 uF;uniform vec3 uL;uniform vec3 uU;uniform float uK;
+varying vec3 vBW;varying vec3 vBN;
+float beamI(float h,float v){ // luminous intensity (cd) toward horizontal angle h (+ = left) and vertical angle v (+ = up), degrees from the lamp axis
+ float cut=-0.57+min(0.268*max(h,0.0),1.5);
+ float k=1.0-smoothstep(cut-0.2,cut+0.12,v);
+ float a=(h-2.5)/8.0,b=(v-(cut-1.1))/2.1;
+ float c=h/20.0,d=(v+4.5)/7.0;
+ float up=exp(-max(v-cut,0.0)/1.2)*exp(-0.5*h*h/900.0);
+ return (26000.0*exp(-0.5*(a*a+b*b))+3000.0*exp(-0.5*(c*c+d*d)))*k+250.0*up*(1.0-k);
+}
+float beamE(vec3 P,vec3 N){ // illuminance (lux) at P with surface normal N from both lamps
+ float E=0.0;
+ for(int i=0;i<2;i++){
+  vec3 v=P-uLamp[i];float f=dot(v,uF);
+  if(f>0.3){float d2=dot(v,v);
+   float h=degrees(atan(dot(v,uL),f)),vv=degrees(atan(dot(v,uU),f));
+   E+=beamI(h,vv)*max(dot(N,-v)*inversesqrt(d2),0.0)/d2;}
+ }
+ return E;
+}`;
+function addBeam(mat){
+ mat.onBeforeCompile=sh=>{
+  Object.assign(sh.uniforms,BU);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vBW;varying vec3 vBN;')
+   .replace('#include <project_vertex>','#include <project_vertex>\nvBW=(modelMatrix*vec4(transformed,1.0)).xyz;vBN=normalize(mat3(modelMatrix)*objectNormal);');
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+BEAM_GLSL)
+   .replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nif(uK>0.001){reflectedLight.directDiffuse+=diffuseColor.rgb*vec3(1.0,0.96,0.88)*uK*1.7*(1.0-exp(-pow(beamE(vBW,normalize(vBN))/4.0,0.65)));}');
+ };
+ mat.needsUpdate=true;
+}
+addBeam(ground.material);addBeam(wm);
+function beam(fd){
+ car.updateMatrixWorld(true);const m=body.matrixWorld;
+ BU.uLamp.value[0].copy(lamp[0]).applyMatrix4(m);BU.uLamp.value[1].copy(lamp[1]).applyMatrix4(m);
+ BU.uF.value.set(0,0,1).transformDirection(m);BU.uL.value.set(1,0,0).transformDirection(m);BU.uU.value.set(0,1,0).transformDirection(m);
+ beamOn+=((s.lights?1:0)-beamOn)*(1-Math.exp(-fd*12)); // lamp warm-up
+ mPlate.emissiveIntensity=0.5*beamOn;                  // faint plate light
+ BU.uK.value=beamOn*(0.04+0.96*nightT);                 // washed out in daylight
+}
+
+// ---------- Low-poly 116d ----------
+const car=new THREE.Group(),body=new THREE.Group();car.add(body);scene.add(car);
+const mWhite=new THREE.MeshStandardMaterial({color:0xf1f1ef,roughness:0.35,metalness:0.1}),
+ mGlass=new THREE.MeshStandardMaterial({color:0x101418,roughness:0.1,metalness:0.3}),
+ mBlack=new THREE.MeshStandardMaterial({color:0x0b0b0b,roughness:0.8}),
+ mRim=new THREE.MeshStandardMaterial({color:0xb9bdc1,roughness:0.3,metalness:0.8});
+function prof(pts,depth,mat){const sh=new THREE.Shape();pts.forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));
+ const g=new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false});g.translate(0,0,-depth/2);g.rotateY(-Math.PI/2);
+ const m=new THREE.Mesh(g,mat);m.castShadow=true;return m;}
+body.add(prof([[-2.14,0.3],[2.15,0.3],[2.18,0.6],[2.02,0.8],[0.8,0.93],[-1.0,0.95],[-2.1,0.98],[-2.15,0.7]],1.7,mWhite));
+body.add(prof([[0.75,0.93],[0.2,1.4],[-1.0,1.42],[-1.9,1.02],[-1.9,0.93]],1.5,mGlass));
+const roof=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.04,1.3),mWhite);roof.position.set(0,1.42,-0.4);body.add(roof);
+const box=(w,h,d,x,y,z,m)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);body.add(o);return o;};
+box(0.17,0.12,0.03,0.1,0.58,2.18,mBlack);box(0.17,0.12,0.03,-0.1,0.58,2.18,mBlack);box(0.9,0.14,0.03,0,0.37,2.17,mBlack);
+const mHead=new THREE.MeshStandardMaterial({color:0xdde,emissive:0xffffee,emissiveIntensity:0}),
+ mTail=new THREE.MeshStandardMaterial({color:0x5a0000,emissive:0xff0000,emissiveIntensity:0.15});
+box(0.36,0.1,0.05,0.6,0.72,2.14,mHead);box(0.36,0.1,0.05,-0.6,0.72,2.14,mHead);
+box(0.38,0.12,0.05,0.62,0.82,-2.14,mTail);box(0.38,0.12,0.05,-0.62,0.82,-2.14,mTail);
+const wheelGroups=W.map(w=>{
+ const g=new THREE.Group(),sp=new THREE.Group();g.add(sp);g.position.set(w.y,R,w.x);
+ const t=new THREE.Mesh(new THREE.CylinderGeometry(R,R,0.205,24),mBlack);t.rotation.z=Math.PI/2;t.castShadow=true;
+ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.21,5),mRim);r.rotation.z=Math.PI/2;sp.add(t,r);car.add(g);
+ const arch=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.01,20),mBlack);arch.rotation.z=Math.PI/2;
+ arch.position.set(Math.sign(w.y)*0.852,R,w.x);car.add(arch);
+ return {g,sp};});
+
+// ---------- BMW M140i model (visual only: same body/wheel groups, no physics involved) ----------
+// Model by Ddiaz Design, CC BY 4.0: https://sketchfab.com/3d-models/2018-bmw-m140i-24f09cc46773424fb2a3922427f1c37d
+// The low-poly car above stays as a fallback and is hidden once the model has loaded.
+const lowPoly=[...body.children,...car.children.filter(c=>c!==body)];
+function makeEnv(){ // soft overcast sky used only for reflections on the car (the world itself is unchanged)
+ const es=new THREE.Scene(),geo=new THREE.SphereGeometry(50,32,16),p=geo.attributes.position,col=[],c=new THREE.Color();
+ for(let i=0;i<p.count;i++){const y=p.getY(i)/50;
+  if(y>=0)c.setRGB(0.71+0.29*y,0.725+0.275*y,0.74+0.26*y);else c.setRGB(0.71*(1+0.78*y),0.725*(1+0.78*y),0.74*(1+0.78*y));
+  col.push(c.r,c.g,c.b);}
+ geo.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+ es.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
+ const sunB=new THREE.Mesh(new THREE.SphereGeometry(7,12,8),new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,2.2,2.1)}));
+ sunB.position.set(-30,50,20).normalize().multiplyScalar(40);es.add(sunB);
+ try{const pm=new THREE.PMREMGenerator(renderer),t=pm.fromScene(es,0.04).texture;pm.dispose();return t;}
+ catch(e){console.warn('reflection map unavailable',e);return null;}
+}
+function splitWheels(geo,zMid){ // one merged mesh holds all 4 wheels -> 4 geometries (FL,FR,RL,RR by x>0 / z>0)
+ const g=geo.index?geo.toNonIndexed():geo,names=Object.keys(g.attributes),pos=g.attributes.position,out=[{},{},{},{}];
+ names.forEach(n=>out.forEach(o=>o[n]=[]));
+ for(let t=0;t<pos.count;t+=3){
+  const cx=(pos.getX(t)+pos.getX(t+1)+pos.getX(t+2))/3,cz=(pos.getZ(t)+pos.getZ(t+1)+pos.getZ(t+2))/3;
+  const q=(cz>zMid?0:2)+(cx>0?0:1);
+  names.forEach(n=>{const a=g.attributes[n],s=a.itemSize;for(let k=0;k<3;k++)for(let j=0;j<s;j++)out[q][n].push(a.array[(t+k)*s+j]);});
+ }
+ return out.map(o=>{const b=new THREE.BufferGeometry();names.forEach(n=>b.setAttribute(n,new THREE.Float32BufferAttribute(o[n],g.attributes[n].itemSize)));return b;});
+}
+new THREE.GLTFLoader().load('bmw-m140i.glb',gltf=>{
+ const oldWG=wheelGroups.slice(),addedG=[];
+ try{
+ const root=gltf.scene,env=makeEnv(),seen=new Set();
+ root.scale.setScalar(100);          // model is authored in cm-scaled nodes -> metres (4.33 m long, 2.69 m wheelbase)
+ root.position.z=1.331;              // model front axle -> sim front axle (A_=1.345 ahead of the centre)
+ root.updateMatrixWorld(true);
+ const wheelParts={Rim:[],Tyres:[],Break:[],Calipers:[]},drop=[];
+ root.traverse(o=>{
+  if(!o.isMesh)return;
+  const tag=Object.keys(wheelParts).find(k=>o.name.includes('_'+k+'_'));
+  if(tag){const g=o.geometry.clone().applyMatrix4(o.matrixWorld);wheelParts[tag].push({g,m:o.material});drop.push(o);return;}
+  const m=o.material,n=m.name;
+  if(n==='iWhite_Glow1'){o.material=mHead;headMeshes.push(o);}
+  else if(n==='iRed_Glow1'){o.material=mTail;}
+  else if(!seen.has(m)){
+   seen.add(m);
+   m.color&&m.color.convertLinearToSRGB();m.emissive&&m.emissive.convertLinearToSRGB();
+   if(m.map)m.map.encoding=THREE.LinearEncoding;
+   m.envMap=env;m.envMapIntensity=0.9;
+   if(n==='iBody1'){ // body paint: Estoril blue with a clearcoat
+    const p=new THREE.MeshPhysicalMaterial({color:new THREE.Color(0.0,0.15,0.52),metalness:0.55,roughness:0.32,clearcoat:1,clearcoatRoughness:0.06,envMap:env,envMapIntensity:1.0});
+    p.name=n;seen.add(p);o.material=p;
+   }
+   if(n==='iBody_Dark_Metallic1'){m.color.setRGB(0.03,0.03,0.036);m.metalness=0.4;m.roughness=0.45;} // panel-gap / diffuser filler: dark, not silver
+   if(m.transparent||m.alphaMode==='BLEND'){m.transparent=true;m.depthWrite=false;}
+  }
+  if(o.material.transparent){o.renderOrder=2;o.castShadow=false;}else o.castShadow=true;
+ });
+ drop.forEach(o=>o.parent.remove(o));
+ // Wheels: split the merged rim/tyre/disc/caliper meshes into four hubs and attach them like the old wheels
+ const zMid=0,tyre=splitWheels(wheelParts.Tyres[0].g,zMid),rim=splitWheels(wheelParts.Rim[0].g,zMid),
+  disc=splitWheels(wheelParts.Break[0].g,zMid),cal=splitWheels(wheelParts.Calipers[0].g,zMid);
+ const fix=m=>{if(seen.has(m))return;seen.add(m);m.color&&m.color.convertLinearToSRGB();m.emissive&&m.emissive.convertLinearToSRGB();
+  if(m.map)m.map.encoding=THREE.LinearEncoding;m.envMap=env;m.envMapIntensity=0.9;};
+ Object.values(wheelParts).forEach(a=>fix(a[0].m));
+ for(let i=0;i<4;i++){
+  tyre[i].computeBoundingBox();const bb=tyre[i].boundingBox,cen=bb.getCenter(new THREE.Vector3());
+  const g=new THREE.Group(),sp=new THREE.Group();g.position.copy(cen);g.add(sp);
+  const add=(geo,mat,parent)=>{geo.translate(-cen.x,-cen.y,-cen.z);const m=new THREE.Mesh(geo,mat);m.castShadow=true;parent.add(m);};
+  add(tyre[i],wheelParts.Tyres[0].m,sp);add(rim[i],wheelParts.Rim[0].m,sp);add(disc[i],wheelParts.Break[0].m,sp);
+  add(cal[i],wheelParts.Calipers[0].m,g);           // calipers steer with the wheel but do not spin
+  car.add(g);addedG.push(g);wheelGroups[i]={g,sp}; // index order matches W: FL,FR,RL,RR
+ }
+ body.add(root);
+ lowPoly.forEach(o=>o.visible=false);
+ setLamps(headMeshes);collectEnv();addPlateLights();
+ window.__modelReady=true;
+ }catch(e){ // anything unexpected: restore the low-poly car untouched
+  console.warn('M140i model setup failed, using low-poly fallback',e);
+  addedG.forEach(g=>car.remove(g));oldWG.forEach((w,i)=>wheelGroups[i]=w);window.__modelReady='failed';
+ }
+},undefined,err=>{console.warn('M140i model failed to load, using low-poly fallback',err);window.__modelReady='failed';});
+
+// ---------- Render loop ----------
+let camYaw=0,last=performance.now(),acc=0;
+const $=id=>document.getElementById(id);
+function draw(fd){
+ car.position.set(s.X,0,s.Z);car.rotation.y=s.psi;body.rotation.set(s.pitch,0,s.roll);
+ W.forEach((w,i)=>{wheelGroups[i].g.rotation.y=w.steer;wheelGroups[i].sp.rotation.x=w.ang;});
+ mTail.emissiveIntensity=(s.ped>0.05?1:0.15)+(s.lights?0.35:0);mHead.emissiveIntensity=s.lights?1.2:0;
+ const sp=Math.hypot(s.u,s.v);
+ let d=s.psi-camYaw;d=Math.atan2(Math.sin(d),Math.cos(d));camYaw+=d*(1-Math.exp(-fd*3));
+ if(window.updateCamera)window.updateCamera(fd,sp); // camera.js: chase / free / cinematic (visual only)
+ sun.position.set(s.X-30,50,s.Z+20);sun.target.position.set(s.X,0,s.Z);
+ dayNight(fd);beam(fd);
+ $('spd').textContent=Math.round(Math.abs(s.u)*3.6);$('mph').textContent=Math.round(Math.abs(s.u)*2.23694);
+ $('g').textContent=(s.gear<0?'R':s.gear===0?'N':s.gear)+(s.auto?' A':' M');
+ $('rpm').style.width=clamp(s.rpm/RMAX,0,1)*100+'%';
+ $('mode').textContent=perf?'M140i':'116d';$('tcs').textContent=tcOn?'':'TC OFF';
+ renderer.render(scene,cam);
+}
+function loop(t){requestAnimationFrame(loop);const fd=Math.min((t-last)/1000,0.05);last=t;acc+=fd;
+ while(acc>=DT){step(DT);acc-=DT;}draw(fd);}
+requestAnimationFrame(loop);
+
+// ---------- Touch controls (iOS / touch screens) ----------
+// Buttons simply dispatch the same keydown/keyup events as the keyboard, so the driving code is untouched.
+(function(){
+ const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0||(matchMedia&&matchMedia('(pointer:coarse)').matches);
+ if(!isTouch)return;
+ document.body.classList.add('touch');
+ const fire=(type,code)=>window.dispatchEvent(new KeyboardEvent(type,{code,key:code,bubbles:true,cancelable:true}));
+ document.querySelectorAll('#touch .b').forEach(b=>{
+  const code=b.dataset.k,hold=b.hasAttribute('data-hold');let active=null;
+  b.addEventListener('pointerdown',e=>{e.preventDefault();if(active!==null)return;active=e.pointerId;
+   try{b.setPointerCapture(e.pointerId);}catch(_){}
+   b.classList.add('on');fire('keydown',code);
+   if(!hold)setTimeout(()=>fire('keyup',code),60);});
+  const release=e=>{if(e.pointerId!==active)return;active=null;b.classList.remove('on');if(hold)fire('keyup',code);};
+  b.addEventListener('pointerup',release);b.addEventListener('pointercancel',release);b.addEventListener('lostpointercapture',release);
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+ });
+ // stop iOS scrolling / pinch-zooming / double-tap zooming the page while driving
+ document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+ ['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
+ // release everything if the app is backgrounded mid-press
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)document.querySelectorAll('#touch .b[data-hold]').forEach(b=>fire('keyup',b.dataset.k));});
+})();
+</script>
+<script src="camera.js"></script>
+<script src="world.js"></script>
+</body></html>
